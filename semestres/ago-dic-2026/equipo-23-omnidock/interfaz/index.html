@@ -1,67 +1,210 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>OmniDock — Panel de Control IoT</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OmniDock — Alcancía Inteligente</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
-    .contenedor { max-width: 900px; margin: auto; }
-    .tarjetas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .tarjeta { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; }
-    .saldo { font-size: 2.5rem; font-weight: 700; color: #38bdf8; margin: 8px 0; }
-    button { background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; margin-right: 8px; }
-    button.secundario { background: #475569; }
-    ul { list-style: none; padding: 0; }
-    li { padding: 8px 0; border-bottom: 1px solid #334155; font-size: 0.95rem; }
+    :root {
+      --bg: #0b1320;
+      --card: #152232;
+      --border: #24354a;
+      --text: #f0f6fc;
+      --muted: #94a3b8;
+      --accent: #2ea8ff;
+      --green: #38e54d;
+      --red: #ff4d4d;
+      --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 32px 20px; }
+    .container { max-width: 1020px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+    h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
+    .broker-bar { display: flex; gap: 8px; align-items: center; background: var(--card); padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); }
+    .broker-bar input { background: #0b1320; color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; width: 175px; font-size: 0.85rem; }
+    .grid-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+    .card-title { font-size: 1rem; color: #cbd5e1; margin-bottom: 12px; font-weight: 500; }
+    .saldo-valor { font-size: 3.1rem; font-weight: 800; color: var(--accent); margin-bottom: 12px; }
+    .status-row { display: flex; align-items: center; gap: 10px; font-size: 0.92rem; color: #cbd5e1; margin-top: 6px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--amber); display: inline-block; }
+    .dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .dot.offline { background: var(--red); }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    button { border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: opacity 0.15s; }
+    button:hover { opacity: 0.88; }
+    .btn-primary { background: #0ea5e9; color: #fff; }
+    .btn-secondary { background: #475569; color: #fff; }
+    .btn-amber { background: #d97706; color: #fff; }
+    .denom-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 10px; margin-top: 12px; }
+    .denom-box { background: #0f1926; border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; }
+    .denom-label { font-size: 0.8rem; color: var(--muted); }
+    .denom-count { font-size: 1.3rem; font-weight: 700; color: var(--text); margin-top: 4px; }
+    .log-list { list-style: none; margin-top: 14px; max-height: 280px; overflow-y: auto; }
+    .log-item { display: flex; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 0.92rem; }
+    .log-time { color: var(--muted); font-family: monospace; margin-right: 12px; }
+    .log-monto { font-weight: 700; color: var(--green); }
+    .badge-fb { font-size: 0.78rem; padding: 3px 8px; border-radius: 6px; background: #1e293b; color: #38bdf8; border: 1px solid #334155; }
   </style>
 </head>
 <body>
-  <div class="contenedor">
-    <h1>OmniDock — Alcancía Inteligente</h1>
-    <div class="tarjetas">
-      <div class="tarjeta">
-        <div>Saldo Total Resguardado</div>
-        <div class="saldo" id="saldo">$0 MXN</div>
-        <div id="estado-mqtt">Conectando a broker MQTT...</div>
+  <div class="container">
+    <header>
+      <h1>OmniDock — Alcancía Inteligente</h1>
+      <div class="broker-bar">
+        <span style="font-size: 0.82rem; color: var(--muted);">Broker WS:</span>
+        <input type="text" id="brokerInput" value="ws://10.245.60.63:8884" />
+        <button class="btn-primary" style="padding: 6px 12px;" onclick="conectarBroker()">Conectar</button>
       </div>
-      <div class="tarjeta">
-        <div>Cerradura Biométrica y Puerta</div>
-        <p id="estado-puerta">Estado: <strong>Cerrada (Segura)</strong></p>
-        <button onclick="enviarComando('omnivault/actuador/puerta/cmd', 'OPEN')">Liberar Seguro</button>
-        <button class="secundario" onclick="enviarComando('omnivault/actuador/puerta/cmd', 'CLOSE')">Bloquear</button>
+    </header>
+
+    <div class="grid-top">
+      <div class="card">
+        <div class="card-title">Saldo Total Resguardado</div>
+        <div class="saldo-valor" id="saldoTotal">$0 MXN</div>
+        <div class="status-row">
+          <span class="dot" id="mqttDot"></span>
+          <span id="mqttTexto">Conectando a Mosquitto...</span>
+          <span class="badge-fb" id="fbBadge">Firebase: Local</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Cerradura Biométrica y Puerta</div>
+        <div style="font-size: 1.05rem; margin-bottom: 6px;">
+          Estado: <strong id="estadoPuerta" style="color: var(--green);">Cerrada (Segura)</strong>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--muted);" id="estadoHuella">
+          Lector AS608 activo en espera de huella
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" onclick="enviarComando('omnidock/actuador/puerta/cmd', 'OPEN')">Liberar Seguro</button>
+          <button class="btn-secondary" onclick="enviarComando('omnidock/actuador/puerta/cmd', 'CLOSE')">Bloquear</button>
+          <button class="btn-amber" onclick="registrarHuella()">Registrar Huella</button>
+        </div>
       </div>
     </div>
-    <div class="tarjeta">
-      <h3>Bitácora de Transacciones en Tiempo Real</h3>
-      <ul id="bitacora"><li>Esperando transacciones...</li></ul>
+
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-title">Desglose de Monedas y Billetes Clasificados por IA</div>
+      <div class="denom-grid">
+        <div class="denom-box"><div class="denom-label">Moneda $1</div><div class="denom-count" id="m1">0</div></div>
+        <div class="denom-box"><div class="denom-label">Moneda $2</div><div class="denom-count" id="m2">0</div></div>
+        <div class="denom-box"><div class="denom-label">Moneda $5</div><div class="denom-count" id="m5">0</div></div>
+        <div class="denom-box"><div class="denom-label">Moneda $10</div><div class="denom-count" id="m10">0</div></div>
+        <div class="denom-box"><div class="denom-label">Billete $20</div><div class="denom-count" id="b20">0</div></div>
+        <div class="denom-box"><div class="denom-label">Billete $50</div><div class="denom-count" id="b50">0</div></div>
+        <div class="denom-box"><div class="denom-label">Billete $100</div><div class="denom-count" id="b100">0</div></div>
+        <div class="denom-box"><div class="denom-label">Billete $200</div><div class="denom-count" id="b200">0</div></div>
+        <div class="denom-box"><div class="denom-label">Billete $500</div><div class="denom-count" id="b500">0</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Bitácora de Transacciones en Tiempo Real</div>
+      <ul class="log-list" id="bitacoraLista">
+        <li class="log-item"><span style="color: var(--muted);">Esperando eventos del sistema...</span></li>
+      </ul>
     </div>
   </div>
 
   <script>
-    const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
-    client.on('connect', () => {
-      document.getElementById('estado-mqtt').innerText = '🟢 Conectado en tiempo real';
-      client.subscribe('omnivault/servidor/saldo');
-    });
+    let client = null;
 
-    client.on('message', (topic, message) => {
-      if (topic === 'omnivault/servidor/saldo') {
-        const data = JSON.parse(message.toString());
-        document.getElementById('saldo').innerText = `$${data.saldo_total} MXN`;
-        document.getElementById('estado-puerta').innerHTML = data.puerta_abierta
-          ? 'Estado: <strong style="color:#f87171;">Abierta</strong>'
-          : 'Estado: <strong style="color:#4ade80;">Cerrada (Segura)</strong>';
-
-        document.getElementById('bitacora').innerHTML = (data.historial || []).map(item =>
-          `<li>[${item.hora}] ${item.evento} ${item.monto ? '(+$' + item.monto + ')' : ''}</li>`
-        ).join('');
+    function conectarBroker() {
+      if (client) {
+        try { client.end(true); } catch (e) {}
       }
-    });
+      const url = document.getElementById('brokerInput').value.trim();
+      document.getElementById('mqttTexto').textContent = 'Conectando...';
+      document.getElementById('mqttDot').className = 'dot';
 
-    function enviarComando(topico, cmd) {
-      client.publish(topico, cmd);
+      client = mqtt.connect(url);
+
+      client.on('connect', () => {
+        document.getElementById('mqttDot').className = 'dot online';
+        document.getElementById('mqttTexto').textContent = 'Conectado en tiempo real';
+        client.subscribe('omnidock/#');
+      });
+
+      client.on('error', () => {
+        document.getElementById('mqttDot').className = 'dot offline';
+        document.getElementById('mqttTexto').textContent = 'Sin conexión al broker';
+      });
+
+      client.on('message', (topic, payload) => {
+        try {
+          const data = JSON.parse(payload.toString());
+          if (topic === 'omnidock/servidor/saldo') {
+            actualizarTablero(data);
+          } else if (topic === 'omnidock/sensor/huella') {
+            const el = document.getElementById('estadoHuella');
+            if (data.acceso) {
+              el.textContent = `Último acceso autorizado: Usuario ID #${data.id}`;
+              el.style.color = '#38e54d';
+            } else if (data.acceso === false) {
+              el.textContent = 'Alerta: Huella no registrada rechazada';
+              el.style.color = '#ff4d4d';
+            }
+          }
+        } catch (e) {}
+      });
     }
+
+    function actualizarTablero(estado) {
+      document.getElementById('saldoTotal').textContent = `$${estado.saldo_total || 0} MXN`;
+      document.getElementById('fbBadge').textContent = estado.firebase_sync ? 'Firebase: Sincronizado' : 'Respaldo: Local JSON';
+
+      const m = estado.monedas || {};
+      ['1', '2', '5', '10'].forEach(k => {
+        document.getElementById('m' + k).textContent = m[k] || 0;
+      });
+
+      const b = estado.billetes || {};
+      ['20', '50', '100', '200', '500'].forEach(k => {
+        document.getElementById('b' + k).textContent = b[k] || 0;
+      });
+
+      const pEl = document.getElementById('estadoPuerta');
+      if (estado.puerta_abierta) {
+        pEl.textContent = 'Abierta';
+        pEl.style.color = '#f59e0b';
+      } else {
+        pEl.textContent = 'Cerrada (Segura)';
+        pEl.style.color = '#38e54d';
+      }
+
+      const ul = document.getElementById('bitacoraLista');
+      const hist = estado.historial || [];
+      if (hist.length > 0) {
+        ul.innerHTML = hist.map(item => `
+          <li class="log-item">
+            <div><span class="log-time">[${item.hora}]</span><span>${item.evento}</span></div>
+            <div class="log-monto">${item.monto > 0 ? '+$' + item.monto + ' MXN' : ''}</div>
+          </li>
+        `).join('');
+      }
+    }
+
+    function enviarComando(topico, mensaje) {
+      if (client && client.connected) {
+        client.publish(topico, mensaje);
+      } else {
+        alert('Conéctate primero al broker Mosquitto.');
+      }
+    }
+
+    function registrarHuella() {
+      const id = prompt('Ingresa el número de ID (1 a 127) para guardar la nueva huella en el sensor AS608:', '1');
+      if (id) {
+        enviarComando('omnidock/actuador/huella/cmd', JSON.stringify({ registrar_id: parseInt(id, 10) }));
+        alert('Coloca tu dedo en el sensor AS608 dos veces cuando parpadee.');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', conectarBroker);
   </script>
 </body>
 </html>
