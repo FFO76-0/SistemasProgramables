@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>OmniDock — Panel de Control IoT</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .contenedor { max-width: 900px; margin: auto; }
+    .tarjetas { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .tarjeta { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; }
+    .saldo { font-size: 2.5rem; font-weight: 700; color: #38bdf8; margin: 8px 0; }
+    button { background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; margin-right: 8px; }
+    button.secundario { background: #475569; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 8px 0; border-bottom: 1px solid #334155; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <div class="contenedor">
+    <h1>OmniDock — Alcancía Inteligente</h1>
+    <div class="tarjetas">
+      <div class="tarjeta">
+        <div>Saldo Total Resguardado</div>
+        <div class="saldo" id="saldo">$0 MXN</div>
+        <div id="estado-mqtt">Conectando a broker MQTT...</div>
+      </div>
+      <div class="tarjeta">
+        <div>Cerradura Biométrica y Puerta</div>
+        <p id="estado-puerta">Estado: <strong>Cerrada (Segura)</strong></p>
+        <button onclick="enviarComando('omnivault/actuador/puerta/cmd', 'OPEN')">Liberar Seguro</button>
+        <button class="secundario" onclick="enviarComando('omnivault/actuador/puerta/cmd', 'CLOSE')">Bloquear</button>
+      </div>
+    </div>
+    <div class="tarjeta">
+      <h3>Bitácora de Transacciones en Tiempo Real</h3>
+      <ul id="bitacora"><li>Esperando transacciones...</li></ul>
+    </div>
+  </div>
+
+  <script>
+    const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+    client.on('connect', () => {
+      document.getElementById('estado-mqtt').innerText = '🟢 Conectado en tiempo real';
+      client.subscribe('omnivault/servidor/saldo');
+    });
+
+    client.on('message', (topic, message) => {
+      if (topic === 'omnivault/servidor/saldo') {
+        const data = JSON.parse(message.toString());
+        document.getElementById('saldo').innerText = `$${data.saldo_total} MXN`;
+        document.getElementById('estado-puerta').innerHTML = data.puerta_abierta
+          ? 'Estado: <strong style="color:#f87171;">Abierta</strong>'
+          : 'Estado: <strong style="color:#4ade80;">Cerrada (Segura)</strong>';
+
+        document.getElementById('bitacora').innerHTML = (data.historial || []).map(item =>
+          `<li>[${item.hora}] ${item.evento} ${item.monto ? '(+$' + item.monto + ')' : ''}</li>`
+        ).join('');
+      }
+    });
+
+    function enviarComando(topico, cmd) {
+      client.publish(topico, cmd);
+    }
+  </script>
+</body>
+</html>
